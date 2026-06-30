@@ -16,6 +16,8 @@ export type DateRangeMode =
 
 export type WriteMode = 'append' | 'overwrite' | 'upsert';
 
+export type BudgetExecutionMode = 'request_only' | 'external_owner_tool';
+
 export interface ExportFunction {
   enabled: boolean;
   function_key: string;
@@ -91,4 +93,12 @@ export interface DraftConfig {
   alertIfScriptErrorCountGt: number;
   alertIfCostSpikePercentGt: number;
   alertIfConversionDropPercentGt: number;
+  // Budget action workflow settings. Request/approval only; no Google Ads mutate.
+  budgetActionsEnabled: boolean;
+  budgetRequireOwnerApproval: boolean;
+  budgetMaxIncreasePct: number;
+  budgetMaxDecreasePct: number;
+  budgetExecutionMode: BudgetExecutionMode;
+  budgetOwnerApprovalContact: string;
+  budgetApprovedExecutionTool: string;
 }
