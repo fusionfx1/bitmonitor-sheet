@@ -294,7 +294,7 @@ export const TIMEZONES = [
 ];
 
 export const CURRENCIES = [
-  'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'SGD', 'CHF', 'HKD', 'NZD',
+  'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'SGD', 'CHF', 'HKD', 'NZD', 'THB',
 ];
 
 export function createDefaultDraft(partial?: Partial<DraftConfig>): DraftConfig {
