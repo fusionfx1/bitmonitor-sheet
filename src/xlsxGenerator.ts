@@ -127,6 +127,7 @@ function settingsExporterRows(cfg: DraftConfig): unknown[][] {
     ['ENABLE_GEO_EXPORT', fmt(cfg.exportFunctions.find(f => f.function_key === 'raw_geo_daily')?.enabled ?? true), 'boolean', 'false', 'Enable geographic view export'],
     ['ENABLE_CONVERSION_ACTION_EXPORT', fmt(cfg.exportFunctions.find(f => f.function_key === 'raw_conversion_action_daily')?.enabled ?? true), 'boolean', 'false', 'Enable conversion action export'],
     ['ENABLE_CHANGE_HISTORY_EXPORT', fmt(cfg.exportFunctions.find(f => f.function_key === 'raw_change_history_daily')?.enabled ?? true), 'boolean', 'false', 'Enable change history export'],
+    ['CAMPAIGN_NAME_FILTER', '', 'string', 'false', 'Optional: filter by campaign name substring (leave blank for all campaigns)'],
     ['LOG_LEVEL', cfg.enableDebugLogs ? 'DEBUG' : 'INFO', 'string', 'false', 'DEBUG | INFO | WARN | ERROR'],
   ];
 }

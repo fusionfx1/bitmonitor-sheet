@@ -211,20 +211,6 @@ export const DEFAULT_EXPORT_FUNCTIONS: ExportFunction[] = [
     gaql_resource_rule: 'N/A - internal',
     compatibility_notes: 'No GAQL query. Written by error handler.',
   },
-  {
-    enabled: true,
-    function_key: 'raw_dashboard_summary',
-    display_name: 'Dashboard Summary',
-    destination_tab: 'dashboard_summary_daily',
-    date_grain: 'DAY',
-    max_rows: 365,
-    lookback_days_override: null,
-    write_mode: 'overwrite',
-    status: 'active',
-    notes: 'Aggregated summary for dashboard',
-    gaql_resource_rule: 'customer',
-    compatibility_notes: 'Derived from customer resource aggregate query.',
-  },
 ];
 
 export const SHEET_TABS = {

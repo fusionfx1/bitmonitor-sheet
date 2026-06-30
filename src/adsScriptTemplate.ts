@@ -14,6 +14,13 @@ export function buildAdsScript(cfg: DraftConfig): string {
 //   3. Paste this script and set SHEET_URL to your Google Sheet URL
 //   4. Authorize under the CORRECT Google Ads account only
 //   5. Run manually once to verify, then set hourly schedule
+//
+// SHEET-DRIVEN DESIGN:
+//   All runtime config is read from the Sheet at execution time.
+//   - Global settings:     _settings_exporter (key/value)
+//   - Per-job settings:    _export_jobs (enabled, max_rows, lookback_days, write_mode, status)
+//   - ENABLE_* flags:      _settings_exporter controls optional job groups
+//   Editing the Sheet changes script behavior with no redeployment needed.
 // ============================================================
 
 var SHEET_URL  = "PASTE_GENERATED_SHEET_URL_HERE";
@@ -45,7 +52,7 @@ function main() {
     ss   = SpreadsheetApp.openByUrl(SHEET_URL);
     cfg  = readConfig(ss);
     jobs = readExportJobs(ss);
-    log_(cfg, "Loaded config. Environment: " + cfg.environment +
+    log_(cfg, "Config loaded. Environment: " + cfg.environment +
          " | Date mode: " + cfg._dateMode +
          " | Jobs defined: " + jobs.length);
   } catch (e) {
@@ -57,18 +64,33 @@ function main() {
   for (var i = 0; i < jobs.length; i++) {
     var job = jobs[i];
 
-    if (job.enabled !== "true") {
-      log_(cfg, "SKIP (disabled): " + job.job_key);
-      continue;
-    }
-    // Internal jobs written by the script itself — not GAQL-driven
+    // Internal jobs: written directly by this script — not GAQL-driven
     if (job.job_key === "raw_sync_runs" ||
         job.job_key === "raw_errors"    ||
         job.job_key === "raw_script_health") {
       continue;
     }
+
+    // enabled column must be "true"
+    if (job.enabled !== "true") {
+      log_(cfg, "SKIP (enabled=false): " + job.job_key);
+      continue;
+    }
+
+    // status column must be "active"
+    if (job.status !== "active") {
+      log_(cfg, "SKIP (status=" + job.status + "): " + job.job_key);
+      continue;
+    }
+
+    // ENABLE_* feature flags in _settings_exporter
+    if (!isJobAllowedBySettings(job.job_key, cfg)) {
+      log_(cfg, "SKIP (ENABLE_* flag = false): " + job.job_key);
+      continue;
+    }
+
     if (!JOB_GAQL[job.job_key]) {
-      log_(cfg, "SKIP (no GAQL defined for key): " + job.job_key);
+      log_(cfg, "SKIP (no GAQL handler defined): " + job.job_key);
       continue;
     }
 
@@ -76,11 +98,11 @@ function main() {
     jobsRun++;
 
     try {
-      var maxRows    = getMaxRowsForJob(job.job_key, cfg);
-      var dateClause = buildDateClause(cfg, job.job_key);
+      var maxRows    = getMaxRowsForJob(job, cfg);
+      var dateClause = buildDateClause(cfg, job);
       var gaql       = JOB_GAQL[job.job_key](dateClause, maxRows, cfg);
 
-      if (cfg._debug) Logger.log("[BitMonitor] GAQL: " + gaql.substring(0, 200));
+      if (cfg._debug) Logger.log("[BitMonitor] GAQL: " + gaql.substring(0, 240));
 
       var rows = fetchGaqlRows(gaql, job.job_key, syncRunId);
       writeToTab(ss, job.destination_tab, rows, job.write_mode || "overwrite");
@@ -104,7 +126,33 @@ function main() {
 }
 
 // ============================================================
-// CONFIG — reads key/value from _settings_exporter tab
+// FEATURE FLAG GUARD
+// Checks ENABLE_* keys in _settings_exporter.
+// Returns false if the job should be suppressed regardless of
+// the enabled column in _export_jobs.
+// ============================================================
+function isJobAllowedBySettings(jobKey, cfg) {
+  if ((jobKey === "raw_pmax_asset_group_daily" || jobKey === "raw_pmax_terms_daily") &&
+      cfg.ENABLE_PMAX_EXPORTS === "false") {
+    return false;
+  }
+  if (jobKey === "raw_search_terms_daily" && cfg.ENABLE_SEARCH_TERMS === "false") {
+    return false;
+  }
+  if (jobKey === "raw_geo_daily" && cfg.ENABLE_GEO_EXPORT === "false") {
+    return false;
+  }
+  if (jobKey === "raw_conversion_action_daily" && cfg.ENABLE_CONVERSION_ACTION_EXPORT === "false") {
+    return false;
+  }
+  if (jobKey === "raw_change_history_daily" && cfg.ENABLE_CHANGE_HISTORY_EXPORT === "false") {
+    return false;
+  }
+  return true;
+}
+
+// ============================================================
+// CONFIG — reads key/value pairs from _settings_exporter tab
 // ============================================================
 function readConfig(ss) {
   var sheet = ss.getSheetByName(CFG_TAB);
@@ -116,6 +164,7 @@ function readConfig(ss) {
     var val = String(data[i][1]).trim();
     if (key) cfg[key] = val;
   }
+  // Parsed convenience fields (prefixed with _ to avoid collision)
   cfg._maxRows      = parseInt(cfg.MAX_ROWS       || "5000",  10);
   cfg._maxRowsPmax  = parseInt(cfg.MAX_ROWS_PMAX   || "1000",  10);
   cfg._maxRowsTerms = parseInt(cfg.MAX_ROWS_TERMS  || "10000", 10);
@@ -130,6 +179,10 @@ function readConfig(ss) {
 
 // ============================================================
 // EXPORT JOBS — reads from _export_jobs tab
+// Columns: enabled, job_key, destination_tab, resource_name,
+//          date_grain, lookback_days, max_rows, write_mode,
+//          requires_gaql, safe_resource_notes, status,
+//          last_run_at, last_rows_written, last_error
 // ============================================================
 function readExportJobs(ss) {
   var sheet = ss.getSheetByName(JOBS_TAB);
@@ -149,38 +202,45 @@ function readExportJobs(ss) {
   return jobs;
 }
 
-function getMaxRowsForJob(jobKey, cfg) {
-  if (jobKey === "raw_pmax_asset_group_daily" || jobKey === "raw_pmax_terms_daily") {
-    return cfg._maxRowsPmax;
-  }
-  if (jobKey === "raw_search_terms_daily") {
-    return cfg._maxRowsTerms;
-  }
+// ============================================================
+// MAX ROWS — per-job column overrides global config
+// ============================================================
+function getMaxRowsForJob(job, cfg) {
+  var jobMax = parseInt(job.max_rows, 10);
+  if (!isNaN(jobMax) && jobMax > 0) return jobMax;
+  // Fallback to global key-based defaults
+  var k = job.job_key;
+  if (k === "raw_pmax_asset_group_daily" || k === "raw_pmax_terms_daily") return cfg._maxRowsPmax;
+  if (k === "raw_search_terms_daily") return cfg._maxRowsTerms;
   return cfg._maxRows;
 }
 
 // ============================================================
-// DATE CLAUSE BUILDER
+// DATE CLAUSE — per-job lookback_days overrides global when
+// DATE_RANGE_MODE = CUSTOM
 // ============================================================
-function buildDateClause(cfg, jobKey) {
-  var mode = cfg._dateMode;
-  if (jobKey === "raw_change_history_daily") {
-    return buildChangeDateClause(cfg);
+function buildDateClause(cfg, job) {
+  if (job.job_key === "raw_change_history_daily") {
+    return buildChangeDateClause(cfg, job);
   }
+  var mode = cfg._dateMode;
   if (mode === "CUSTOM") {
+    var lookback = parseInt(job.lookback_days, 10);
+    if (isNaN(lookback) || lookback <= 0) lookback = cfg._lookback;
     var now   = new Date();
     var start = new Date();
-    start.setDate(start.getDate() - cfg._lookback);
+    start.setDate(start.getDate() - lookback);
     return "BETWEEN '" + fmtDate_(start) + "' AND '" + fmtDate_(now) + "'";
   }
   return "DURING " + mode;
 }
 
-// change_event uses a datetime range, not DURING
-function buildChangeDateClause(cfg) {
-  var days   = cfg._lookback > 0 ? cfg._lookback : 30;
+// change_event uses a datetime range — DURING is not supported
+function buildChangeDateClause(cfg, job) {
+  var days = parseInt(job.lookback_days, 10);
+  if (isNaN(days) || days <= 0) days = cfg._lookback;
   var modeMap = { "LAST_7_DAYS": 7, "LAST_14_DAYS": 14, "LAST_30_DAYS": 30, "YESTERDAY": 1, "TODAY": 0 };
-  if (modeMap[cfg._dateMode] !== undefined) {
+  if (cfg._dateMode !== "CUSTOM" && modeMap[cfg._dateMode] !== undefined) {
     days = modeMap[cfg._dateMode] > 0 ? modeMap[cfg._dateMode] : 1;
   }
   var now   = new Date();
@@ -196,6 +256,7 @@ function fmtDate_(d) {
 
 // ============================================================
 // GAQL QUERIES — one builder function per job_key
+// All queries are SELECT-only. No mutations.
 // ============================================================
 var JOB_GAQL = {
 
@@ -337,9 +398,9 @@ var JOB_GAQL = {
 };
 
 // ============================================================
-// GAQL FIELD PATHS — ordered to match tab column headers
-// null at position 0 = sync_run_id (injected by script)
-// null at other positions = computed field
+// GAQL FIELD PATHS — ordered to match tab column headers.
+// null at position 0 = sync_run_id (injected by the script).
+// null at other positions = computed field filled in post-loop.
 // ============================================================
 var JOB_FIELDS = {
   raw_account_daily: [
@@ -424,7 +485,7 @@ var JOB_FIELDS = {
     "campaign_budget.id","campaign_budget.name",
     "campaign_budget.amount_micros","campaign_budget.delivery_method",
     "metrics.cost_micros",
-    null  // budget_utilization_pct — computed below
+    null  // budget_utilization_pct — computed in fetchGaqlRows
   ],
   raw_change_history_daily: [
     null,
@@ -453,12 +514,12 @@ function fetchGaqlRows(gaql, jobKey, syncRunId) {
       if (i === 0) {
         row.push(syncRunId);
       } else if (fields[i] === null) {
-        row.push("");           // placeholder; computed after push
+        row.push("");  // placeholder; computed below
       } else {
         row.push(r[fields[i]] !== undefined ? r[fields[i]] : "");
       }
     }
-    // Compute budget_utilization_pct (raw_budget_daily only, position 10)
+    // Compute budget_utilization_pct at index 10 for raw_budget_daily
     if (jobKey === "raw_budget_daily" && row.length > 10) {
       var costMicros   = parseFloat(row[9])  || 0;
       var budgetMicros = parseFloat(row[7])  || 0;
@@ -473,6 +534,9 @@ function fetchGaqlRows(gaql, jobKey, syncRunId) {
 
 // ============================================================
 // WRITE TO SHEET TAB
+// write_mode from _export_jobs:
+//   "overwrite" — preserve row 1 (headers), clear body, write new data
+//   "append"    — find last row, append below
 // ============================================================
 function writeToTab(ss, tabName, rows, writeMode) {
   var sheet = ss.getSheetByName(tabName);
@@ -492,7 +556,7 @@ function writeToTab(ss, tabName, rows, writeMode) {
     var startRow = Math.max(lastRow + 1, 2);
     sheet.getRange(startRow, 1, rows.length, colCount).setValues(rows);
   } else {
-    // overwrite: preserve row 1 (headers), clear body, rewrite
+    // overwrite: preserve row 1 (headers), clear row 2+, write fresh data
     var lastRowAll = sheet.getLastRow();
     if (lastRowAll > 1) {
       sheet.getRange(2, 1, lastRowAll - 1, Math.max(sheet.getLastColumn(), colCount))
@@ -568,7 +632,7 @@ function writeScriptHealth(ss, syncRunId, durationMs, errorCount, cfg) {
   }
 }
 
-// Clear the "(auto-populated by script)" placeholder row
+// Clears the "(auto-populated by script)" placeholder on row 2 if present
 function clearPlaceholder_(sheet, colCount) {
   if (sheet.getLastRow() === 2) {
     var val = String(sheet.getRange(2, 1).getValue());
