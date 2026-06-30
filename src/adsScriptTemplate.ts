@@ -182,11 +182,12 @@ function buildDateClause(cfg, job) {
 function buildChangeDateClause(cfg, job) {
   var days = parseInt(job.lookback_days, 10);
   if (isNaN(days) || days <= 0) days = cfg._lookback;
-  if (days > 30) days = 30;
+  if (days > 29) days = 29;
   var modeMap = { "LAST_7_DAYS": 7, "LAST_14_DAYS": 14, "LAST_30_DAYS": 30, "YESTERDAY": 1, "TODAY": 0 };
   if (cfg._dateMode !== "CUSTOM" && modeMap[cfg._dateMode] !== undefined) {
     days = modeMap[cfg._dateMode] > 0 ? modeMap[cfg._dateMode] : 1;
   }
+  if (days > 29) days = 29;
   var now   = new Date();
   var start = new Date();
   start.setDate(start.getDate() - days);
@@ -272,7 +273,7 @@ var JOB_GAQL = {
   },
 
   raw_pmax_terms_daily: function(dc, maxRows, cfg) {
-    var q = "SELECT customer.id, campaign.id, campaign.name, " +
+    var q = "SELECT customer.id, campaign.id, campaign.name, campaign.advertising_channel_type, " +
             "segments.product_category_level1, " +
             "segments.date, metrics.impressions, metrics.clicks, metrics.cost_micros, " +
             "metrics.conversions, metrics.conversions_value " +
