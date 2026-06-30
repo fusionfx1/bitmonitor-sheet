@@ -8,6 +8,11 @@ BitMonitor Sheet Generator creates a ready-to-import Google Sheets workbook for 
 
 All generation happens in your browser. No data is sent to any server.
 
+## Staff Guides
+
+- [Staff Setup Guide](docs/STAFF_SETUP_GUIDE.md)
+- [Budget Action Workflow](docs/BUDGET_ACTION_WORKFLOW.md)
+
 ## Why 1 Account = 1 Sheet
 
 Each Google Ads account must have its own dedicated Sheet. Sharing one Sheet across multiple accounts causes:
