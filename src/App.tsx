@@ -20,6 +20,7 @@ import { SheetTabsPage } from './pages/SheetTabsPage';
 import { ScriptSettingsPage } from './pages/ScriptSettingsPage';
 import { BridgeSettingsPage } from './pages/BridgeSettingsPage';
 import { DashboardSettingsPage } from './pages/DashboardSettingsPage';
+import { BudgetActionsPage } from './pages/BudgetActionsPage';
 import { GeneratePage } from './pages/GeneratePage';
 import { RecentDraftsPage } from './pages/RecentDraftsPage';
 import { HelpPage } from './pages/HelpPage';
@@ -81,6 +82,7 @@ function App() {
       case 'script-settings': return <ScriptSettingsPage {...commonProps} />;
       case 'bridge-settings': return <BridgeSettingsPage {...commonProps} />;
       case 'dashboard-settings': return <DashboardSettingsPage {...commonProps} />;
+      case 'budget-actions': return <BudgetActionsPage {...commonProps} />;
       case 'generate': return <GeneratePage config={config} />;
       case 'recent-drafts':
         return (
