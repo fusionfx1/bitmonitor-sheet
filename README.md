@@ -4,7 +4,7 @@ A browser-only web app for generating isolated Google Ads / BitMonitor Google Sh
 
 ## What It Does
 
-BitMonitor Sheet Generator creates a ready-to-import Google Sheets workbook for a single Google Ads account. The workbook contains all configuration tabs, export job definitions, field manifests, GAQL safety rules, and placeholder rows that your Google Ads Script and Apps Script bridge need to operate.
+BitMonitor Sheet Generator creates a ready-to-import Google Sheets workbook for a single Google Ads account. The workbook contains all configuration tabs, export job definitions, field manifests, GAQL safety rules, budget action request tabs, and placeholder rows that your Google Ads Script and Apps Script bridge need to operate.
 
 All generation happens in your browser. No data is sent to any server.
 
@@ -32,7 +32,7 @@ Open `http://localhost:5173`.
 
 1. Fill in **New Sheet** — choose template type, enter account nickname and Customer ID
 2. Configure **Export Functions** — enable/disable each export job
-3. Adjust **Script Settings**, **Bridge Settings**, **Dashboard Settings** as needed
+3. Adjust **Script Settings**, **Bridge Settings**, **Dashboard Settings**, and **Budget Actions** as needed
 4. Go to **Generate** — verify all validation checks pass
 5. Click **Download .xlsx** (or **Download .csv.zip** for individual CSVs)
 
@@ -49,10 +49,34 @@ The filename format is: `bitmonitor-sheet-{nickname}-{customerid}-{YYYYMMDD}.xls
 
 1. In Google Ads, go to Tools > Bulk Actions > Scripts
 2. Create a new script
-3. Paste the config snippet from the **Generate** page
+3. Paste the full Google Ads Script Exporter from the **Generate** page
 4. Replace `PASTE_GENERATED_SHEET_URL_HERE` with the URL of your Google Sheet
 5. Authorize the script under the correct Google Ads account (matching `customer_id`)
 6. Run once manually to verify — check `_script_health` tab for status
+
+The generated exporter is read-only. It pulls Google Ads reports into the Sheet and must not contain `AdsApp.mutate`, budget update, pause, enable, or campaign edit actions.
+
+## Budget Actions
+
+Budget Actions are request/approval workflow tabs. They do not change Google Ads budgets by themselves.
+
+Generated budget workflow tabs:
+
+| Tab | Purpose |
+|---|---|
+| `_settings_budget_actions` | Budget action workflow settings |
+| `_budget_action_policy` | Owner approval rules |
+| `_budget_action_requests` | Staff budget change request queue |
+| `_owner_approval_log` | Owner approval and execution audit log |
+
+Default safety model:
+
+- Staff may request budget changes.
+- Owner approval is required.
+- Execution is external and owner-controlled.
+- The Google Ads Script Exporter remains read-only.
+
+See [`docs/BUDGET_ACTION_WORKFLOW.md`](docs/BUDGET_ACTION_WORKFLOW.md) for the operator workflow.
 
 ## Connect Apps Script Bridge
 
@@ -70,6 +94,7 @@ The filename format is: `bitmonitor-sheet-{nickname}-{customerid}-{YYYYMMDD}.xls
 - **No backend exists.** All generation is browser-local
 - **Drafts are stored in localStorage only.** They never leave your browser
 - **No external API calls** are made by this app
+- **Budget action tabs are not a write API.** They are request/approval logs only
 
 ## Production Checklist
 
@@ -82,6 +107,7 @@ Before switching to `production` environment:
 - [ ] Google Ads Script `SHEET_URL` points to this specific Sheet
 - [ ] Script authorized under the correct Google Ads account
 - [ ] Test run completed — `_script_health` shows no errors
+- [ ] `_budget_action_policy` reviewed by owner
 - [ ] `_qa_checklist` tab reviewed and all items checked
 
 ## Build and Test
