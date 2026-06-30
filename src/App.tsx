@@ -55,7 +55,7 @@ function App() {
   }, [config, saveDraft]);
 
   const handleLoadDraft = useCallback((draft: DraftConfig) => {
-    setConfig(draft);
+    setConfig(createDefaultDraft(draft));
     setActivePage('new-sheet');
   }, []);
 
