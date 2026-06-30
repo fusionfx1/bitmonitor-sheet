@@ -13,6 +13,7 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import CodeIcon from '@mui/icons-material/Code';
 import LinkIcon from '@mui/icons-material/Link';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import PriceChangeIcon from '@mui/icons-material/PriceChange';
 import DownloadIcon from '@mui/icons-material/Download';
 import HistoryIcon from '@mui/icons-material/History';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
@@ -26,6 +27,7 @@ export type NavPage =
   | 'script-settings'
   | 'bridge-settings'
   | 'dashboard-settings'
+  | 'budget-actions'
   | 'generate'
   | 'recent-drafts'
   | 'help';
@@ -44,6 +46,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'script-settings', label: 'ตั้งค่า Script', icon: <CodeIcon fontSize="small" /> },
   { page: 'bridge-settings', label: 'ตั้งค่า Bridge', icon: <LinkIcon fontSize="small" /> },
   { page: 'dashboard-settings', label: 'ตั้งค่า Dashboard', icon: <DashboardIcon fontSize="small" /> },
+  { page: 'budget-actions', label: 'Budget Actions', icon: <PriceChangeIcon fontSize="small" /> },
   { page: 'generate', label: 'สร้างไฟล์', icon: <DownloadIcon fontSize="small" /> },
   { page: 'recent-drafts', label: 'ร่างล่าสุด', icon: <HistoryIcon fontSize="small" /> },
   { page: 'help', label: 'วิธีใช้งาน', icon: <HelpOutlineIcon fontSize="small" /> },
