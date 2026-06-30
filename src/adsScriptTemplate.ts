@@ -34,10 +34,13 @@ var ERRORS_TAB = "_error_log";
 // ENTRY POINT
 // ============================================================
 function main() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    Logger.log("[BitMonitor] Another run already in progress — exiting to prevent overlap.");
-    return;
+  var lock = null;
+  if (typeof LockService !== "undefined") {
+    lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) {
+      Logger.log("[BitMonitor] Another run already in progress — exiting to prevent overlap.");
+      return;
+    }
   }
 
   var ss, cfg, jobs;
@@ -57,7 +60,7 @@ function main() {
          " | Jobs defined: " + jobs.length);
   } catch (e) {
     Logger.log("[BitMonitor] FATAL: Cannot open Sheet — " + e.message);
-    lock.releaseLock();
+    if (lock) lock.releaseLock();
     return;
   }
 
@@ -118,7 +121,7 @@ function main() {
   var durationMs = new Date().getTime() - t0;
   appendSyncRun(ss, syncRunId, startedAt, jobsRun, totalRows, errorCount);
   writeScriptHealth(ss, syncRunId, durationMs, errorCount, cfg);
-  lock.releaseLock();
+  if (lock) lock.releaseLock();
   Logger.log("[BitMonitor] Complete. Jobs: " + jobsRun +
              " | Rows: " + totalRows +
              " | Errors: " + errorCount +
