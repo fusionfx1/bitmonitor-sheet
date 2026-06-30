@@ -34,14 +34,7 @@ var ERRORS_TAB = "_error_log";
 // ENTRY POINT
 // ============================================================
 function main() {
-  var lock = null;
-  if (typeof LockService !== "undefined") {
-    lock = LockService.getScriptLock();
-    if (!lock.tryLock(10000)) {
-      Logger.log("[BitMonitor] Another run already in progress — exiting to prevent overlap.");
-      return;
-    }
-  }
+  Logger.log("[BitMonitor] Starting Google Ads read-only reporting run...");
 
   var ss, cfg, jobs;
   var syncRunId  = "bm_" + new Date().getTime();
@@ -60,7 +53,6 @@ function main() {
          " | Jobs defined: " + jobs.length);
   } catch (e) {
     Logger.log("[BitMonitor] FATAL: Cannot open Sheet — " + e.message);
-    if (lock) lock.releaseLock();
     return;
   }
 
@@ -121,7 +113,6 @@ function main() {
   var durationMs = new Date().getTime() - t0;
   appendSyncRun(ss, syncRunId, startedAt, jobsRun, totalRows, errorCount);
   writeScriptHealth(ss, syncRunId, durationMs, errorCount, cfg);
-  if (lock) lock.releaseLock();
   Logger.log("[BitMonitor] Complete. Jobs: " + jobsRun +
              " | Rows: " + totalRows +
              " | Errors: " + errorCount +
@@ -464,7 +455,7 @@ var JOB_FIELDS = {
     "segments.date","customer.id","campaign.id","campaign.name",
     "geographic_view.country_criterion_id",
     "geographic_view.country_criterion_id",
-    "geographic_view.location_type","geographic_view.location_type",
+    "geographic_view.location_type",
     "metrics.impressions","metrics.clicks","metrics.cost_micros",
     "metrics.conversions","metrics.conversions_value"
   ],
