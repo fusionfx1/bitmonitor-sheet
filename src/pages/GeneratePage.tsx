@@ -32,6 +32,7 @@ import type { DraftConfig } from '../types';
 import { SHEET_TABS } from '../constants';
 import { downloadXlsx, downloadCsvZip, getFilenameBase } from '../xlsxGenerator';
 import { buildAdsScript } from '../adsScriptTemplate';
+import { buildBridgeScript } from '../bridgeScriptTemplate';
 
 interface Props {
   config: DraftConfig;
@@ -177,22 +178,7 @@ export function GeneratePage({ config }: Props) {
   };
 
   const adsScriptSnippet = buildAdsScript(config);
-
-  const bridgeSnippet = `// Apps Script Bridge — Sheet Config
-// วางโค้ดนี้ใน Apps Script web app ของคุณ
-// Bridge token จะถูกอ่านจาก Sheet _settings_bridge ตอน runtime
-
-const SHEET_URL = "PASTE_GENERATED_SHEET_URL_HERE";
-const CONFIG_TAB = "_settings_bridge";
-const DASHBOARD_CONFIG_TAB = "_settings_dashboard";
-const SCRIPT_HEALTH_TAB = "_script_health";
-const SYNC_RUNS_TAB = "_sync_runs";
-const ERROR_LOG_TAB = "_error_log";
-const BRIDGE_VERSION = "${config.sheetVersion}";
-
-// สำคัญ: อ่าน BRIDGE_TOKEN_PLACEHOLDER จาก CONFIG_TAB ตอน runtime
-// ตรวจสอบ token ของ request ที่เข้ามากับค่านี้
-// ห้ามเขียน token จริงลงใน script โดยตรง`;
+  const bridgeSnippet = buildBridgeScript(config);
 
   return (
     <Box>
@@ -401,9 +387,11 @@ const BRIDGE_VERSION = "${config.sheetVersion}";
 
       <Card>
         <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 2 }}>Code Snippet สำหรับ Apps Script Bridge</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 2 }}>Apps Script Bridge (Complete — Deployable)</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            วางใน Apps Script web app Bridge token จะถูกอ่านจาก Sheet ตอน runtime
+            Script สมบูรณ์พร้อม deploy ใน Google Apps Script Web App แทนที่ <code>PASTE_GENERATED_SHEET_URL_HERE</code> ด้วย URL ของ Google Sheet
+            จากนั้น Deploy &gt; New Deployment &gt; Web App (Execute as: Me, Access: Anyone)
+            Token ถูกอ่านจาก <code>_settings_bridge</code> ตอน runtime — ไม่มี credential ใดในโค้ดนี้
           </Typography>
           <CodeBlock code={bridgeSnippet} />
         </CardContent>
