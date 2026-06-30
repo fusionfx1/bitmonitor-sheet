@@ -24,8 +24,8 @@ import { GeneratePage } from './pages/GeneratePage';
 import { RecentDraftsPage } from './pages/RecentDraftsPage';
 import { HelpPage } from './pages/HelpPage';
 import { useDrafts } from './useDrafts';
-import { createDefaultDraft } from './constants';
-import type { DraftConfig } from './types';
+import { createDefaultDraft, applyTemplateDefaults } from './constants';
+import type { DraftConfig, TemplateType } from './types';
 
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
@@ -38,7 +38,12 @@ function App() {
   const { drafts, saveDraft, deleteDraft, duplicateDraft } = useDrafts();
 
   const handleChange = useCallback((updates: Partial<DraftConfig>) => {
-    setConfig(prev => ({ ...prev, ...updates }));
+    setConfig(prev => {
+      if ('templateType' in updates && updates.templateType !== prev.templateType) {
+        return applyTemplateDefaults(prev, updates.templateType as TemplateType);
+      }
+      return { ...prev, ...updates };
+    });
   }, []);
 
   const handleSaveDraft = useCallback(() => {

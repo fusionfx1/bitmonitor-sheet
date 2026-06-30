@@ -11,6 +11,15 @@ function fmt(v: unknown): string {
 function makeSheet(rows: unknown[][]): XLSX.WorkSheet {
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+  // Set reasonable column widths
+  const maxCols = Math.max(...rows.map(r => r.length));
+  ws['!cols'] = Array.from({ length: maxCols }, (_, i) => {
+    const maxLen = Math.max(
+      ...rows.map(r => String(r[i] ?? '').length),
+      8,
+    );
+    return { wch: Math.min(maxLen + 2, 60) };
+  });
   return ws;
 }
 
@@ -23,9 +32,11 @@ function readmeRows(cfg: DraftConfig): unknown[][] {
     ['Account Nickname', cfg.accountNickname],
     ['Customer ID', cfg.customerId],
     ['Environment', cfg.environment.toUpperCase()],
+    ['Template Type', cfg.templateType],
     ['Generated At', now],
     ['Sheet Version', cfg.sheetVersion],
     ['Script Version', cfg.scriptVersion],
+    ['Ads API Version', cfg.adsApiVersion],
     ['Owner Email', cfg.ownerEmail],
     [],
     ['--- ISOLATION WARNING ---'],
@@ -81,7 +92,7 @@ function settingsGlobalRows(cfg: DraftConfig): unknown[][] {
 }
 
 function settingsAccountRows(cfg: DraftConfig): unknown[][] {
-  return [
+  const rows: unknown[][] = [
     ['key', 'value', 'type', 'required', 'description'],
     ['account_nickname', cfg.accountNickname, 'string', 'true', 'Short nickname for this account'],
     ['customer_id', cfg.customerId, 'string', 'true', 'Google Ads Customer ID (no dashes)'],
@@ -91,7 +102,10 @@ function settingsAccountRows(cfg: DraftConfig): unknown[][] {
     ['owner_email', cfg.ownerEmail, 'string', 'true', 'Owner email for access tracking'],
     ['export_schedule_note', cfg.exportScheduleNote, 'string', 'false', 'Human note about export schedule'],
     ['template_type', cfg.templateType, 'string', 'true', 'Sheet template type used'],
+    ['is_mcc_child_account', fmt(cfg.isMccChildAccount ?? false), 'boolean', 'false', 'True if this is a child account under an MCC'],
+    ['mcc_parent_customer_id', cfg.mccParentCustomerId ?? '', 'string', 'false', 'MCC Manager account Customer ID (if is_mcc_child_account = true)'],
   ];
+  return rows;
 }
 
 function settingsExporterRows(cfg: DraftConfig): unknown[][] {
@@ -195,46 +209,188 @@ function tabManifestRows(): unknown[][] {
 }
 
 function fieldManifestRows(): unknown[][] {
+  const header = ['job_key', 'field_name', 'data_type', 'gaql_field', 'notes'];
   return [
-    ['job_key', 'field_name', 'data_type', 'gaql_field', 'notes'],
-    ['raw_account_daily', 'date', 'DATE', 'segments.date', ''],
+    header,
+    // raw_account_daily
+    ['raw_account_daily', 'sync_run_id', 'STRING', 'N/A - internal', 'Auto-generated run identifier'],
+    ['raw_account_daily', 'date', 'DATE', 'segments.date', 'YYYY-MM-DD'],
     ['raw_account_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_account_daily', 'account_name', 'STRING', 'customer.descriptive_name', ''],
+    ['raw_account_daily', 'currency', 'STRING', 'customer.currency_code', ''],
+    ['raw_account_daily', 'timezone', 'STRING', 'customer.time_zone', ''],
     ['raw_account_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
     ['raw_account_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
     ['raw_account_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', 'Divide by 1000000 for actual cost'],
     ['raw_account_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_account_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_campaign_daily
+    ['raw_campaign_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
     ['raw_campaign_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_campaign_daily', 'customer_id', 'STRING', 'customer.id', ''],
     ['raw_campaign_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
     ['raw_campaign_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
-    ['raw_campaign_daily', 'campaign_status', 'STRING', 'campaign.status', ''],
+    ['raw_campaign_daily', 'campaign_status', 'STRING', 'campaign.status', 'ENABLED | PAUSED | REMOVED'],
+    ['raw_campaign_daily', 'advertising_channel_type', 'STRING', 'campaign.advertising_channel_type', ''],
+    ['raw_campaign_daily', 'advertising_channel_sub_type', 'STRING', 'campaign.advertising_channel_sub_type', ''],
     ['raw_campaign_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
     ['raw_campaign_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
     ['raw_campaign_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
     ['raw_campaign_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_campaign_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_ad_group_daily
+    ['raw_ad_group_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_ad_group_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_ad_group_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_ad_group_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_ad_group_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_ad_group_daily', 'ad_group_id', 'STRING', 'ad_group.id', ''],
+    ['raw_ad_group_daily', 'ad_group_name', 'STRING', 'ad_group.name', ''],
+    ['raw_ad_group_daily', 'ad_group_status', 'STRING', 'ad_group.status', ''],
+    ['raw_ad_group_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
+    ['raw_ad_group_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
+    ['raw_ad_group_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_ad_group_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_ad_group_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_keyword_daily
+    ['raw_keyword_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
     ['raw_keyword_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_keyword_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_keyword_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_keyword_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_keyword_daily', 'ad_group_id', 'STRING', 'ad_group.id', ''],
+    ['raw_keyword_daily', 'ad_group_name', 'STRING', 'ad_group.name', ''],
+    ['raw_keyword_daily', 'criterion_id', 'STRING', 'ad_group_criterion.criterion_id', ''],
     ['raw_keyword_daily', 'keyword_text', 'STRING', 'ad_group_criterion.keyword.text', ''],
-    ['raw_keyword_daily', 'match_type', 'STRING', 'ad_group_criterion.keyword.match_type', ''],
+    ['raw_keyword_daily', 'match_type', 'STRING', 'ad_group_criterion.keyword.match_type', 'EXACT | PHRASE | BROAD'],
+    ['raw_keyword_daily', 'criterion_status', 'STRING', 'ad_group_criterion.status', ''],
+    ['raw_keyword_daily', 'quality_score', 'INTEGER', 'ad_group_criterion.quality_info.quality_score', ''],
+    ['raw_keyword_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
+    ['raw_keyword_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
+    ['raw_keyword_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_keyword_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_keyword_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_search_terms_daily
+    ['raw_search_terms_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
     ['raw_search_terms_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_search_terms_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_search_terms_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_search_terms_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_search_terms_daily', 'ad_group_id', 'STRING', 'ad_group.id', ''],
+    ['raw_search_terms_daily', 'ad_group_name', 'STRING', 'ad_group.name', ''],
     ['raw_search_terms_daily', 'search_term', 'STRING', 'search_term_view.search_term', ''],
-    ['raw_search_terms_daily', 'status', 'STRING', 'search_term_view.status', 'ADDED | EXCLUDED | NONE'],
+    ['raw_search_terms_daily', 'search_term_status', 'STRING', 'search_term_view.status', 'ADDED | EXCLUDED | NONE'],
+    ['raw_search_terms_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
+    ['raw_search_terms_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
+    ['raw_search_terms_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_search_terms_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_search_terms_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_pmax_asset_group_daily
+    ['raw_pmax_asset_group_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_pmax_asset_group_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_pmax_asset_group_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_pmax_asset_group_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_pmax_asset_group_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_pmax_asset_group_daily', 'asset_group_id', 'STRING', 'asset_group.id', ''],
+    ['raw_pmax_asset_group_daily', 'asset_group_name', 'STRING', 'asset_group.name', ''],
+    ['raw_pmax_asset_group_daily', 'asset_group_status', 'STRING', 'asset_group.status', ''],
+    ['raw_pmax_asset_group_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
+    ['raw_pmax_asset_group_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
+    ['raw_pmax_asset_group_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_pmax_asset_group_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_pmax_asset_group_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_pmax_terms_daily
+    ['raw_pmax_terms_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_pmax_terms_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_pmax_terms_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_pmax_terms_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_pmax_terms_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_pmax_terms_daily', 'search_term', 'STRING', 'segments.search_term_match_type', 'PMax term-level from shopping_performance_view'],
+    ['raw_pmax_terms_daily', 'category', 'STRING', 'segments.product_category_level1', ''],
+    ['raw_pmax_terms_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
+    ['raw_pmax_terms_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
+    ['raw_pmax_terms_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_pmax_terms_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_pmax_terms_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_geo_daily
+    ['raw_geo_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_geo_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_geo_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_geo_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_geo_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_geo_daily', 'geo_target_constant_id', 'STRING', 'geographic_view.country_criterion_id', ''],
+    ['raw_geo_daily', 'country_code', 'STRING', 'geographic_view.country_criterion_id', 'Map via geo_target_constant'],
+    ['raw_geo_daily', 'region', 'STRING', 'geographic_view.location_type', ''],
+    ['raw_geo_daily', 'location_type', 'STRING', 'geographic_view.location_type', 'CITY | COUNTRY | REGION'],
+    ['raw_geo_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
+    ['raw_geo_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
+    ['raw_geo_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_geo_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_geo_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_device_daily
+    ['raw_device_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_device_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_device_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_device_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_device_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_device_daily', 'device', 'STRING', 'segments.device', 'MOBILE | DESKTOP | TABLET | CONNECTED_TV'],
+    ['raw_device_daily', 'impressions', 'INTEGER', 'metrics.impressions', ''],
+    ['raw_device_daily', 'clicks', 'INTEGER', 'metrics.clicks', ''],
+    ['raw_device_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_device_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_device_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_conversion_action_daily
+    ['raw_conversion_action_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_conversion_action_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_conversion_action_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_conversion_action_daily', 'conversion_action_id', 'STRING', 'conversion_action.id', ''],
+    ['raw_conversion_action_daily', 'conversion_action_name', 'STRING', 'conversion_action.name', ''],
+    ['raw_conversion_action_daily', 'conversion_action_type', 'STRING', 'conversion_action.type', ''],
+    ['raw_conversion_action_daily', 'conversion_action_category', 'STRING', 'conversion_action.category', ''],
+    ['raw_conversion_action_daily', 'conversion_action_status', 'STRING', 'conversion_action.status', ''],
+    ['raw_conversion_action_daily', 'conversions', 'FLOAT', 'metrics.conversions', ''],
+    ['raw_conversion_action_daily', 'conversion_value', 'FLOAT', 'metrics.conversions_value', ''],
+    // raw_budget_daily
+    ['raw_budget_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_budget_daily', 'date', 'DATE', 'segments.date', ''],
+    ['raw_budget_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_budget_daily', 'campaign_id', 'STRING', 'campaign.id', ''],
+    ['raw_budget_daily', 'campaign_name', 'STRING', 'campaign.name', ''],
+    ['raw_budget_daily', 'budget_id', 'STRING', 'campaign_budget.id', ''],
+    ['raw_budget_daily', 'budget_name', 'STRING', 'campaign_budget.name', ''],
+    ['raw_budget_daily', 'budget_amount_micros', 'INTEGER', 'campaign_budget.amount_micros', ''],
+    ['raw_budget_daily', 'budget_delivery_method', 'STRING', 'campaign_budget.delivery_method', 'STANDARD | ACCELERATED'],
+    ['raw_budget_daily', 'cost_micros', 'INTEGER', 'metrics.cost_micros', ''],
+    ['raw_budget_daily', 'budget_utilization_pct', 'FLOAT', 'N/A - computed', 'cost_micros / budget_amount_micros * 100'],
+    // raw_change_history_daily
+    ['raw_change_history_daily', 'sync_run_id', 'STRING', 'N/A - internal', ''],
+    ['raw_change_history_daily', 'change_date_time', 'DATETIME', 'change_event.change_date_time', ''],
+    ['raw_change_history_daily', 'customer_id', 'STRING', 'customer.id', ''],
+    ['raw_change_history_daily', 'user_email', 'STRING', 'change_event.user_email', ''],
+    ['raw_change_history_daily', 'change_resource_type', 'STRING', 'change_event.change_resource_type', ''],
+    ['raw_change_history_daily', 'change_resource_name', 'STRING', 'change_event.change_resource_name', ''],
+    ['raw_change_history_daily', 'client_type', 'STRING', 'change_event.client_type', ''],
+    ['raw_change_history_daily', 'changed_fields', 'STRING', 'change_event.changed_fields', ''],
+    ['raw_change_history_daily', 'old_resource', 'STRING', 'change_event.old_resource', 'JSON snapshot'],
+    ['raw_change_history_daily', 'new_resource', 'STRING', 'change_event.new_resource', 'JSON snapshot'],
   ];
 }
 
 function gaqlCompatibilityRows(): unknown[][] {
   return [
-    ['job_key', 'safe_from_resource', 'allowed_segments', 'forbidden_segments', 'known_error_to_avoid', 'notes'],
-    ['raw_account_daily', 'customer', 'segments.date, segments.device', '', '', 'Customer resource is safe for account-level metrics'],
-    ['raw_campaign_daily', 'campaign', 'segments.date, segments.device, segments.ad_network_type', '', '', ''],
-    ['raw_ad_group_daily', 'ad_group', 'segments.date, segments.device', '', '', ''],
-    ['raw_keyword_daily', 'ad_group_criterion', 'segments.date', '', 'Do not use campaign_search_term_view.status', 'Filter by type = KEYWORD'],
-    ['raw_search_terms_daily', 'search_term_view', 'segments.date', 'campaign_search_term_view.status', 'Unrecognized field campaign_search_term_view.status', 'Use search_term_view only'],
-    ['raw_pmax_asset_group_daily', 'asset_group', 'segments.date', 'segments.asset_interaction_target.asset', 'Incompatible segment asset_interaction_target.asset from asset_group', 'Do NOT select that segment'],
-    ['raw_pmax_terms_daily', 'shopping_performance_view', 'segments.date', '', '', 'Use shopping_performance_view for PMax term-level data'],
-    ['raw_geo_daily', 'geographic_view', 'geographic_view.location_type', 'segments.geo_target_country', 'Incompatible: segments.geo_target_country from geographic_view', 'Do NOT select geo_target_country segment'],
-    ['raw_device_daily', 'campaign', 'segments.device, segments.date', '', '', 'Segment by device from campaign resource'],
-    ['raw_conversion_action_daily', 'conversion_action', 'segments.conversion_action', '', '', ''],
-    ['raw_budget_daily', 'campaign_budget', 'segments.date', '', '', ''],
-    ['raw_change_history_daily', 'change_event', 'segments.date', 'campaign.*', 'Do not select campaign.* from change_event resource', 'Only change_event native fields'],
+    ['job_key', 'safe_from_resource', 'allowed_segments', 'forbidden_segments', 'known_error_to_avoid', 'safe_metric_fields', 'notes'],
+    ['raw_account_daily', 'customer', 'segments.date, segments.device', '', '', 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value', 'Customer resource is safe for account-level metrics'],
+    ['raw_campaign_daily', 'campaign', 'segments.date, segments.device, segments.ad_network_type', '', '', 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value', 'Safe to select campaign.* fields from campaign resource'],
+    ['raw_ad_group_daily', 'ad_group', 'segments.date, segments.device', '', '', 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value', 'Select from ad_group resource. Avoid mixing with campaign_search_term_view'],
+    ['raw_keyword_daily', 'ad_group_criterion', 'segments.date', '', 'Do not use campaign_search_term_view.status — unrecognized field', 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions', 'Filter WHERE ad_group_criterion.type = KEYWORD'],
+    ['raw_search_terms_daily', 'search_term_view', 'segments.date', 'campaign_search_term_view.status', 'FORBIDDEN: campaign_search_term_view.status is unrecognized. Use search_term_view.status', 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions', 'Use search_term_view only — do not mix with campaign_search_term_view'],
+    ['raw_pmax_asset_group_daily', 'asset_group', 'segments.date', 'segments.asset_interaction_target.asset', 'FORBIDDEN: segments.asset_interaction_target.asset from asset_group is incompatible segment', 'metrics.impressions, metrics.clicks, metrics.cost_micros', 'Do NOT select asset_interaction_target.asset from asset_group'],
+    ['raw_pmax_terms_daily', 'shopping_performance_view', 'segments.date, segments.product_category_level1', '', '', 'metrics.impressions, metrics.clicks, metrics.cost_micros', 'Use shopping_performance_view for PMax term-level data'],
+    ['raw_geo_daily', 'geographic_view', 'geographic_view.location_type', 'segments.geo_target_country', 'FORBIDDEN: segments.geo_target_country is incompatible with geographic_view', 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions', 'Do NOT select geo_target_country segment from geographic_view'],
+    ['raw_device_daily', 'campaign', 'segments.device, segments.date', '', '', 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions', 'Segment by segments.device from campaign resource'],
+    ['raw_conversion_action_daily', 'conversion_action', 'segments.conversion_action, segments.date', '', '', 'metrics.conversions, metrics.conversions_value', 'Select from conversion_action resource with segments.conversion_action'],
+    ['raw_budget_daily', 'campaign_budget', 'segments.date', '', '', 'metrics.cost_micros', 'Select from campaign_budget resource'],
+    ['raw_change_history_daily', 'change_event', 'segments.date', 'campaign.*', 'FORBIDDEN: Do not select campaign.* fields from change_event resource', 'N/A', 'Only change_event native fields allowed. No campaign.* fields.'],
   ];
 }
 
@@ -255,6 +411,8 @@ function qaChecklistRows(): unknown[][] {
     ['No real secrets hardcoded in script', 'PENDING', ''],
     ['PMax exports disabled if account has no PMax campaigns', 'PENDING', ''],
     ['max_rows configured appropriately for account scale', 'PENDING', ''],
+    ['owner_email is correct and has Sheet access', 'PENDING', ''],
+    ['Bridge endpoint URL replaced if bridge enabled', 'PENDING', ''],
   ];
 }
 
@@ -279,23 +437,71 @@ function errorLogRows(): unknown[][] {
   ];
 }
 
+const RAW_HEADERS: Record<string, string[]> = {
+  raw_account_daily: [
+    'sync_run_id', 'date', 'customer_id', 'account_name', 'currency', 'timezone',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_campaign_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name', 'campaign_status',
+    'advertising_channel_type', 'advertising_channel_sub_type',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_ad_group_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'ad_group_id', 'ad_group_name', 'ad_group_status',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_keyword_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'ad_group_id', 'ad_group_name', 'criterion_id', 'keyword_text', 'match_type', 'criterion_status', 'quality_score',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_search_terms_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'ad_group_id', 'ad_group_name', 'search_term', 'search_term_status',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_pmax_asset_group_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'asset_group_id', 'asset_group_name', 'asset_group_status',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_pmax_terms_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'search_term', 'category',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_geo_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'geo_target_constant_id', 'country_code', 'region', 'location_type',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_device_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'device',
+    'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value',
+  ],
+  raw_conversion_action_daily: [
+    'sync_run_id', 'date', 'customer_id',
+    'conversion_action_id', 'conversion_action_name', 'conversion_action_type',
+    'conversion_action_category', 'conversion_action_status',
+    'conversions', 'conversion_value',
+  ],
+  raw_budget_daily: [
+    'sync_run_id', 'date', 'customer_id', 'campaign_id', 'campaign_name',
+    'budget_id', 'budget_name', 'budget_amount_micros', 'budget_delivery_method',
+    'cost_micros', 'budget_utilization_pct',
+  ],
+  raw_change_history_daily: [
+    'sync_run_id', 'change_date_time', 'customer_id', 'user_email',
+    'change_resource_type', 'change_resource_name', 'client_type',
+    'changed_fields', 'old_resource', 'new_resource',
+  ],
+};
+
 function rawDataHeaders(tabName: string): unknown[][] {
-  const commonCols = ['sync_run_id', 'date', 'customer_id', 'impressions', 'clicks', 'cost_micros', 'conversions', 'conversion_value'];
-  const extraCols: Record<string, string[]> = {
-    raw_campaign_daily: ['campaign_id', 'campaign_name', 'campaign_status', 'campaign_type'],
-    raw_ad_group_daily: ['campaign_id', 'campaign_name', 'ad_group_id', 'ad_group_name', 'ad_group_status'],
-    raw_keyword_daily: ['campaign_id', 'ad_group_id', 'keyword_text', 'match_type', 'quality_score'],
-    raw_search_terms_daily: ['campaign_id', 'ad_group_id', 'search_term', 'search_term_status'],
-    raw_pmax_asset_group_daily: ['campaign_id', 'asset_group_id', 'asset_group_name', 'asset_group_status'],
-    raw_pmax_terms_daily: ['campaign_id', 'search_term', 'segment_type'],
-    raw_geo_daily: ['campaign_id', 'country_code', 'region', 'location_type'],
-    raw_device_daily: ['campaign_id', 'device_type'],
-    raw_conversion_action_daily: ['conversion_action_id', 'conversion_action_name', 'conversion_action_type'],
-    raw_budget_daily: ['campaign_id', 'campaign_name', 'budget_amount_micros', 'budget_utilization_pct'],
-    raw_change_history_daily: ['change_resource_type', 'change_resource_name', 'changed_fields', 'old_resource', 'new_resource', 'changed_by'],
-  };
-  const extra = extraCols[tabName] ?? [];
-  const header = [...commonCols.slice(0, 2), ...extra, ...commonCols.slice(2)];
+  const header = RAW_HEADERS[tabName] ?? ['sync_run_id', 'date', 'customer_id'];
   return [header, ['(auto-populated by script)', ...Array(header.length - 1).fill('')]];
 }
 
@@ -394,3 +600,5 @@ export async function downloadCsvZip(cfg: DraftConfig) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export { RAW_HEADERS };

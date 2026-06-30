@@ -24,9 +24,9 @@ interface Props {
 
 const TEMPLATE_OPTIONS: { value: TemplateType; label: string; description: string }[] = [
   { value: 'google_ads_account', label: 'Google Ads Account Sheet', description: 'บัญชีมาตรฐาน เปิดใช้งาน export jobs ทั้งหมด' },
-  { value: 'test_account', label: 'Test Account Sheet', description: 'สภาพแวดล้อมทดสอบ เปิด exports และ debug logs ทั้งหมด' },
-  { value: 'mcc_child', label: 'Manager/MCC Child Account Sheet', description: 'บัญชีลูกภายใต้ MCC ตั้งค่าสำหรับ child-level exports' },
-  { value: 'empty_developer', label: 'Empty Developer Sheet', description: 'Sheet เปล่า ไม่มี export jobs — สำหรับพัฒนา script' },
+  { value: 'test_account', label: 'Test Account Sheet', description: 'สภาพแวดล้อมทดสอบ debug logs เปิด และ max rows ลดลงเพื่อความปลอดภัย' },
+  { value: 'mcc_child', label: 'Manager/MCC Child Account Sheet', description: 'บัญชีลูกภายใต้ MCC มี MCC Parent ID และ flag is_mcc_child_account' },
+  { value: 'empty_developer', label: 'Empty Developer Sheet', description: 'ปิด export jobs ทั้งหมด — ใช้สำหรับพัฒนา script โครงสร้างเท่านั้น' },
 ];
 
 const ENV_OPTIONS: { value: Environment; label: string }[] = [
@@ -77,6 +77,18 @@ export function NewSheetPage({ config, onChange, onSaveDraft }: Props) {
               </Grid>
             ))}
           </Grid>
+
+          {config.templateType === 'empty_developer' && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <strong>Empty Developer Sheet:</strong> Export jobs ทั้งหมดถูกปิดโดยค่าเริ่มต้น
+              Sheet นี้ใช้สำหรับพัฒนา script เท่านั้น
+            </Alert>
+          )}
+          {config.templateType === 'test_account' && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              <strong>Test Account:</strong> Debug logs เปิดอยู่ Max rows ลดลงเพื่อความปลอดภัยในการทดสอบ
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
@@ -106,6 +118,18 @@ export function NewSheetPage({ config, onChange, onSaveDraft }: Props) {
                 required
               />
             </Grid>
+            {config.templateType === 'mcc_child' && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="MCC Parent Customer ID"
+                  size="small"
+                  value={config.mccParentCustomerId ?? ''}
+                  onChange={e => onChange({ mccParentCustomerId: e.target.value })}
+                  helperText="Customer ID ของบัญชี Manager/MCC หลัก"
+                />
+              </Grid>
+            )}
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>เขตเวลา (Timezone)</InputLabel>

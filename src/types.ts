@@ -60,6 +60,9 @@ export interface DraftConfig {
   includeRemovedEntities: boolean;
   enableDebugLogs: boolean;
   exportFunctions: ExportFunction[];
+  // MCC child account settings
+  isMccChildAccount: boolean;
+  mccParentCustomerId: string;
   // Bridge settings
   bridgeEnabled: boolean;
   bridgeTokenPlaceholder: string;

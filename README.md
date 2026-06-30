@@ -1,73 +1,102 @@
-# React + TypeScript + Vite
+# BitMonitor Sheet Generator
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-only web app for generating isolated Google Ads / BitMonitor Google Sheet templates.
 
-Currently, two official plugins are available:
+## What It Does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+BitMonitor Sheet Generator creates a ready-to-import Google Sheets workbook for a single Google Ads account. The workbook contains all configuration tabs, export job definitions, field manifests, GAQL safety rules, and placeholder rows that your Google Ads Script and Apps Script bridge need to operate.
 
-## React Compiler
+All generation happens in your browser. No data is sent to any server.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Why 1 Account = 1 Sheet
 
-## Expanding the ESLint configuration
+Each Google Ads account must have its own dedicated Sheet. Sharing one Sheet across multiple accounts causes:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Permission bleed between accounts
+- Data contamination between accounts
+- Unsafe test/production mixing
+- Script authorization confusion
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+This rule is enforced in the app and documented in every generated workbook.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Run Locally
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open `http://localhost:5173`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Generate an XLSX
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. Fill in **New Sheet** — choose template type, enter account nickname and Customer ID
+2. Configure **Export Functions** — enable/disable each export job
+3. Adjust **Script Settings**, **Bridge Settings**, **Dashboard Settings** as needed
+4. Go to **Generate** — verify all validation checks pass
+5. Click **Download .xlsx** (or **Download .csv.zip** for individual CSVs)
+
+The filename format is: `bitmonitor-sheet-{nickname}-{customerid}-{YYYYMMDD}.xlsx`
+
+## Import into Google Sheets
+
+1. Create a new Google Sheet in the account owner's Google Drive
+2. For each tab in the downloaded XLSX, create a matching tab in Google Sheets with the exact same name
+3. Copy the header row and any data rows from the XLSX tab into the corresponding Google Sheets tab
+4. Tab names must match exactly (case-sensitive)
+
+## Connect Google Ads Script
+
+1. In Google Ads, go to Tools > Bulk Actions > Scripts
+2. Create a new script
+3. Paste the config snippet from the **Generate** page
+4. Replace `PASTE_GENERATED_SHEET_URL_HERE` with the URL of your Google Sheet
+5. Authorize the script under the correct Google Ads account (matching `customer_id`)
+6. Run once manually to verify — check `_script_health` tab for status
+
+## Connect Apps Script Bridge
+
+1. Create an Apps Script project in your Google Drive
+2. Paste the bridge snippet from the **Generate** page
+3. Deploy as a Web App (Execute as: Me, Who has access: Anyone)
+4. Copy the deployment URL into `BRIDGE_ENDPOINT_URL` in the `_settings_bridge` tab
+5. Replace `BRIDGE_TOKEN_PLACEHOLDER` in `_settings_bridge` with a real secure token
+
+## Security Notes
+
+- **No real secrets are generated.** All token fields contain explicit placeholder values
+- **Replace `BRIDGE_TOKEN_PLACEHOLDER`** with your own secure token after copying to Google Sheets
+- **Never commit token values** to version control
+- **No backend exists.** All generation is browser-local
+- **Drafts are stored in localStorage only.** They never leave your browser
+- **No external API calls** are made by this app
+
+## Production Checklist
+
+Before switching to `production` environment:
+
+- [ ] Sheet is isolated — not shared with any other account
+- [ ] `customer_id` matches the Google Ads account exactly
+- [ ] `timezone` and `currency` are correct
+- [ ] `BRIDGE_TOKEN_PLACEHOLDER` replaced with real token in Google Sheets
+- [ ] Google Ads Script `SHEET_URL` points to this specific Sheet
+- [ ] Script authorized under the correct Google Ads account
+- [ ] Test run completed — `_script_health` shows no errors
+- [ ] `_qa_checklist` tab reviewed and all items checked
+
+## Build and Test
+
+```bash
+npm run build   # production build
+npm run lint    # lint check
+npm run test    # run Vitest tests
 ```
+
+## Template Types
+
+| Type | Description |
+|------|-------------|
+| Google Ads Account Sheet | Standard account — all exports enabled |
+| Test Account Sheet | Debug logs on, reduced max rows for safe testing |
+| Manager/MCC Child Account Sheet | Includes MCC parent ID and child account flag |
+| Empty Developer Sheet | No export jobs — for script development only |

@@ -14,6 +14,7 @@ import TableBody from '@mui/material/TableBody';
 import TableRow from '@mui/material/TableRow';
 import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
+import Grid from '@mui/material/Grid';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
@@ -24,6 +25,9 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import OutputIcon from '@mui/icons-material/Output';
 import type { DraftConfig } from '../types';
 import { SHEET_TABS } from '../constants';
 import { downloadXlsx, downloadCsvZip, getFilenameBase } from '../xlsxGenerator';
@@ -32,22 +36,46 @@ interface Props {
   config: DraftConfig;
 }
 
-function validate(cfg: DraftConfig): string[] {
+interface ValidationResult {
+  errors: string[];
+  warnings: string[];
+}
+
+function validate(cfg: DraftConfig): ValidationResult {
   const errors: string[] = [];
+  const warnings: string[] = [];
+
   if (!cfg.customerId) errors.push('กรุณาระบุ Customer ID');
   if (!cfg.accountNickname) errors.push('กรุณาระบุชื่อย่อบัญชี (Nickname)');
   if (!cfg.timezone) errors.push('กรุณาเลือกเขตเวลา');
   if (!cfg.currency) errors.push('กรุณาเลือกสกุลเงิน');
   if (!cfg.sheetVersion) errors.push('กรุณาระบุ Sheet Version');
-  if (!cfg.exportFunctions.some(f => f.enabled)) errors.push('ต้องเปิดใช้งาน Export Function อย่างน้อย 1 รายการ');
-  if (cfg.bridgeEnabled && cfg.bridgeTokenPlaceholder && cfg.bridgeTokenPlaceholder.length < 8) {
-    errors.push('Bridge token placeholder สั้นเกินไป — ควรใช้ placeholder ที่ยาวกว่านี้');
+  if (cfg.templateType !== 'empty_developer' && !cfg.exportFunctions.some(f => f.enabled)) {
+    errors.push('ต้องเปิดใช้งาน Export Function อย่างน้อย 1 รายการ (หรือเลือก Empty Developer template)');
   }
-  const suspiciousTokens = ['mytoken', 'password', '12345', 'secret'];
-  if (cfg.bridgeEnabled && suspiciousTokens.some(t => cfg.bridgeTokenPlaceholder.toLowerCase().includes(t))) {
-    errors.push('Bridge token placeholder ดูเหมือน credential จริง — ควรใช้ placeholder เช่น REPLACE_WITH_YOUR_BRIDGE_TOKEN');
+  if (cfg.environment === 'production' && !cfg.ownerEmail) {
+    errors.push('กรุณาระบุอีเมลเจ้าของ เมื่อใช้ Production environment');
   }
-  return errors;
+  const suspiciousTokens = ['mytoken', 'password', '12345', 'secret', 'token123'];
+  if (cfg.bridgeEnabled && cfg.bridgeTokenPlaceholder &&
+    suspiciousTokens.some(t => cfg.bridgeTokenPlaceholder.toLowerCase().includes(t))) {
+    errors.push('Bridge token ดูเหมือน credential จริง — ใช้ placeholder เช่น REPLACE_WITH_YOUR_BRIDGE_TOKEN');
+  }
+  if (cfg.customerId && /[^0-9-]/.test(cfg.customerId)) {
+    warnings.push('Customer ID มีอักขระพิเศษ — ควรเป็นตัวเลขและขีดกลางเท่านั้น เช่น 123-456-7890');
+  }
+  if (cfg.environment === 'production') {
+    warnings.push('เลือก Production environment — ตรวจสอบการตั้งค่าทั้งหมดก่อน deploy');
+  }
+  if (cfg.bridgeEnabled &&
+    cfg.bridgeEndpointUrl.includes('YOUR_DEPLOYMENT_ID')) {
+    warnings.push('Bridge endpoint ยังเป็น placeholder — แทนที่ด้วย Apps Script deployment URL จริง');
+  }
+  if (cfg.dashboardEnabled && !cfg.dashboardAccountName) {
+    warnings.push('Dashboard เปิดใช้งานแต่ยังไม่ได้ตั้งชื่อบัญชี Dashboard');
+  }
+
+  return { errors, warnings };
 }
 
 function CodeBlock({ code }: { code: string }) {
@@ -98,11 +126,30 @@ function CodeBlock({ code }: { code: string }) {
   );
 }
 
+function SummaryCard({ icon, label, value, color }: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  color?: 'primary' | 'success' | 'warning' | 'error' | 'info';
+}) {
+  return (
+    <Paper variant="outlined" sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box sx={{ color: `${color ?? 'primary'}.main`, display: 'flex', alignItems: 'center' }}>
+        {icon}
+      </Box>
+      <Box>
+        <Typography variant="caption" color="text.secondary" display="block">{label}</Typography>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{value}</Typography>
+      </Box>
+    </Paper>
+  );
+}
+
 export function GeneratePage({ config }: Props) {
   const [snackMsg, setSnackMsg] = useState('');
   const [generating, setGenerating] = useState(false);
 
-  const errors = validate(config);
+  const { errors, warnings } = validate(config);
   const canGenerate = errors.length === 0;
   const enabledFns = config.exportFunctions.filter(f => f.enabled);
   const filenameBase = getFilenameBase(config);
@@ -132,7 +179,7 @@ export function GeneratePage({ config }: Props) {
 // วางโค้ดนี้ใน Google Ads Script ของคุณ
 // Script จะอ่านการตั้งค่าทั้งหมดจาก Sheet tabs — ไม่ต้องเขียน constants ใน script
 
-const SHEET_URL = "วาง URL ของ Sheet ที่สร้างไว้ที่นี่";
+const SHEET_URL = "PASTE_GENERATED_SHEET_URL_HERE";
 const CONFIG_TAB = "_settings_exporter";
 const EXPORT_JOBS_TAB = "_export_jobs";
 const SCRIPT_HEALTH_TAB = "_script_health";
@@ -149,7 +196,7 @@ const ADS_API_VERSION = "${config.adsApiVersion}";
 // วางโค้ดนี้ใน Apps Script web app ของคุณ
 // Bridge token จะถูกอ่านจาก Sheet _settings_bridge ตอน runtime
 
-const SHEET_URL = "วาง URL ของ Sheet ที่สร้างไว้ที่นี่";
+const SHEET_URL = "PASTE_GENERATED_SHEET_URL_HERE";
 const CONFIG_TAB = "_settings_bridge";
 const DASHBOARD_CONFIG_TAB = "_settings_dashboard";
 const SCRIPT_HEALTH_TAB = "_script_health";
@@ -161,45 +208,6 @@ const BRIDGE_VERSION = "${config.sheetVersion}";
 // ตรวจสอบ token ของ request ที่เข้ามากับค่านี้
 // ห้ามเขียน token จริงลงใน script โดยตรง`;
 
-  const setupInstructions = `BitMonitor Sheet Generator — ขั้นตอนการ Deploy
-================================================
-บัญชี: ${config.accountNickname || '(ยังไม่ได้ตั้งค่า)'}
-Customer ID: ${config.customerId || '(ยังไม่ได้ตั้งค่า)'}
-Environment: ${config.environment.toUpperCase()}
-สร้างเมื่อ: ${new Date().toISOString()}
-
-ขั้นตอนที่ 1: สร้าง Google Sheet ใหม่
-  - ล็อกอิน Google Drive ในฐานะเจ้าของบัญชี (${config.ownerEmail || 'owner'})
-  - สร้าง Google Sheet เปล่าใหม่
-  - ตั้งชื่อว่า: BitMonitor - ${config.accountNickname || 'Account'} - ${config.customerId || 'CID'}
-  - คัดลอก URL ของ Sheet นี้
-
-ขั้นตอนที่ 2: นำเข้า tabs จากไฟล์ XLSX ที่สร้าง
-  - เปิดไฟล์ .xlsx ที่ดาวน์โหลด
-  - สำหรับแต่ละ tab: คัดลอก headers และแถวข้อมูลไปยัง Google Sheet tab ที่ตรงกัน
-  - ชื่อ tab ต้องตรงกันทุกตัวอักษร
-
-ขั้นตอนที่ 3: ตั้งค่า Google Ads Script
-  - เปิด Google Ads > เครื่องมือ > Scripts
-  - สร้าง script ใหม่
-  - วาง config snippet ของ Google Ads Script
-  - แทนที่ URL placeholder ด้วย Sheet URL จากขั้นตอนที่ 1
-  - อนุญาต (Authorize) script ภายใต้บัญชี Google Ads ที่ถูกต้อง
-
-ขั้นตอนที่ 4: ทดสอบ
-  - รัน script ครั้งแรกด้วย environment = test
-  - ตรวจสอบ tab _script_health ว่าสถานะ OK
-  - ตรวจสอบ tab _error_log ว่าไม่มี error
-
-ขั้นตอนที่ 5: Production
-  - อัปเดต environment ใน _settings_global เป็น 'production'
-  - ตั้ง daily trigger ใน Google Ads Script scheduler
-  - ติดตาม _script_health เป็นประจำ
-
-ข้อเตือนใจเรื่องการแยก: Sheet นี้สำหรับบัญชี ${config.customerId || '(ยังไม่ได้ตั้งค่า)'} เท่านั้น
-ห้ามแชร์ Sheet URL นี้กับบัญชีอื่น
-แต่ละบัญชีต้องมี Sheet แยกของตัวเอง`;
-
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
@@ -208,12 +216,6 @@ Environment: ${config.environment.toUpperCase()}
           ตรวจสอบการตั้งค่า แล้วดาวน์โหลด XLSX workbook หรือ CSV ZIP
         </Typography>
       </Box>
-
-      {config.environment === 'production' && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          <strong>เลือก Production แล้ว!</strong> ตรวจสอบการตั้งค่าทั้งหมดให้ครบถ้วนก่อนสร้างและ deploy
-        </Alert>
-      )}
 
       {errors.length > 0 && (
         <Alert severity="error" sx={{ mb: 2 }} icon={<ErrorIcon />}>
@@ -224,11 +226,62 @@ Environment: ${config.environment.toUpperCase()}
         </Alert>
       )}
 
-      {canGenerate && (
+      {warnings.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }} icon={<WarningAmberIcon />}>
+          <Typography variant="subtitle2" gutterBottom>ข้อควรระวัง:</Typography>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {warnings.map((w, i) => <li key={i}><Typography variant="body2">{w}</Typography></li>)}
+          </ul>
+        </Alert>
+      )}
+
+      {canGenerate && errors.length === 0 && warnings.length === 0 && (
         <Alert severity="success" sx={{ mb: 2 }} icon={<CheckCircleIcon />}>
           ผ่านการตรวจสอบทั้งหมดแล้ว พร้อมสร้างไฟล์
         </Alert>
       )}
+
+      {canGenerate && warnings.length > 0 && (
+        <Alert severity="success" sx={{ mb: 2 }} icon={<CheckCircleIcon />}>
+          ผ่าน validation แล้ว (มี {warnings.length} คำเตือน) พร้อมสร้างไฟล์
+        </Alert>
+      )}
+
+      {/* Summary Cards */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <SummaryCard
+            icon={<TableChartIcon />}
+            label="จำนวน Tabs ทั้งหมด"
+            value={total}
+            color="primary"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <SummaryCard
+            icon={<OutputIcon />}
+            label="Export Jobs ที่เปิดใช้งาน"
+            value={`${enabledFns.length} / ${config.exportFunctions.length}`}
+            color={enabledFns.length === 0 ? 'warning' : 'success'}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <SummaryCard
+            icon={<CheckCircleIcon />}
+            label="Environment"
+            value={config.environment.toUpperCase()}
+            color={config.environment === 'production' ? 'error' : config.environment === 'staging' ? 'warning' : 'success'}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <SummaryCard
+            icon={<DownloadIcon />}
+            label="ชื่อไฟล์"
+            value={`${filenameBase.slice(0, 28)}…`}
+            color="info"
+          />
+        </Grid>
+      </Grid>
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -281,28 +334,36 @@ Environment: ${config.environment.toUpperCase()}
               <Typography variant="body2">ดูตัวอย่าง: Export Jobs ที่เปิดใช้งาน ({enabledFns.length})</Typography>
             </AccordionSummary>
             <AccordionDetails sx={{ p: 0 }}>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Job Key</TableCell>
-                      <TableCell>Destination Tab</TableCell>
-                      <TableCell>Max Rows</TableCell>
-                      <TableCell>Write Mode</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {enabledFns.map(fn => (
-                      <TableRow key={fn.function_key} hover>
-                        <TableCell><Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{fn.function_key}</Typography></TableCell>
-                        <TableCell><Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{fn.destination_tab}</Typography></TableCell>
-                        <TableCell>{fn.max_rows.toLocaleString()}</TableCell>
-                        <TableCell><Chip label={fn.write_mode} size="small" /></TableCell>
+              {enabledFns.length === 0 ? (
+                <Box sx={{ p: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    ไม่มี export jobs ที่เปิดใช้งาน (Empty Developer template)
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Job Key</TableCell>
+                        <TableCell>Destination Tab</TableCell>
+                        <TableCell>Max Rows</TableCell>
+                        <TableCell>Write Mode</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {enabledFns.map(fn => (
+                        <TableRow key={fn.function_key} hover>
+                          <TableCell><Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{fn.function_key}</Typography></TableCell>
+                          <TableCell><Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{fn.destination_tab}</Typography></TableCell>
+                          <TableCell>{fn.max_rows.toLocaleString()}</TableCell>
+                          <TableCell><Chip label={fn.write_mode} size="small" /></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </AccordionDetails>
           </Accordion>
         </CardContent>
@@ -352,20 +413,13 @@ Environment: ${config.environment.toUpperCase()}
         </CardContent>
       </Card>
 
-      <Card sx={{ mb: 3 }}>
+      <Card>
         <CardContent>
           <Typography variant="subtitle2" sx={{ mb: 2 }}>Code Snippet สำหรับ Apps Script Bridge</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             วางใน Apps Script web app Bridge token จะถูกอ่านจาก Sheet ตอน runtime
           </Typography>
           <CodeBlock code={bridgeSnippet} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 2 }}>ขั้นตอนการ Deploy</Typography>
-          <CodeBlock code={setupInstructions} />
         </CardContent>
       </Card>
 

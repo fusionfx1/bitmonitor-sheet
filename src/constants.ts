@@ -327,6 +327,8 @@ export function createDefaultDraft(partial?: Partial<DraftConfig>): DraftConfig 
     includeRemovedEntities: false,
     enableDebugLogs: false,
     exportFunctions: DEFAULT_EXPORT_FUNCTIONS.map(f => ({ ...f })),
+    isMccChildAccount: false,
+    mccParentCustomerId: '',
     bridgeEnabled: false,
     bridgeTokenPlaceholder: 'REPLACE_WITH_YOUR_BRIDGE_TOKEN',
     bridgeEndpointUrl: 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec',
@@ -355,4 +357,69 @@ export function createDefaultDraft(partial?: Partial<DraftConfig>): DraftConfig 
     alertIfConversionDropPercentGt: 30,
     ...partial,
   };
+}
+
+export function applyTemplateDefaults(
+  existing: DraftConfig,
+  templateType: import('./types').TemplateType,
+): DraftConfig {
+  const base = {
+    accountNickname: existing.accountNickname,
+    customerId: existing.customerId,
+    ownerEmail: existing.ownerEmail,
+    timezone: existing.timezone,
+    currency: existing.currency,
+  };
+
+  switch (templateType) {
+    case 'google_ads_account':
+      return createDefaultDraft({
+        ...base,
+        templateType: 'google_ads_account',
+        environment: 'test',
+        enableDebugLogs: false,
+        exportFunctions: DEFAULT_EXPORT_FUNCTIONS.map(f => ({ ...f, enabled: true })),
+        isMccChildAccount: false,
+        mccParentCustomerId: '',
+      });
+
+    case 'test_account':
+      return createDefaultDraft({
+        ...base,
+        templateType: 'test_account',
+        environment: 'test',
+        enableDebugLogs: true,
+        maxRowsDefault: 1000,
+        maxRowsPmax: 500,
+        maxRowsTerms: 1000,
+        exportFunctions: DEFAULT_EXPORT_FUNCTIONS.map(f => ({ ...f, enabled: true })),
+        isMccChildAccount: false,
+        mccParentCustomerId: '',
+      });
+
+    case 'mcc_child':
+      return createDefaultDraft({
+        ...base,
+        templateType: 'mcc_child',
+        environment: 'test',
+        enableDebugLogs: false,
+        exportFunctions: DEFAULT_EXPORT_FUNCTIONS.map(f => ({ ...f, enabled: true })),
+        isMccChildAccount: true,
+        mccParentCustomerId: existing.mccParentCustomerId || '',
+      });
+
+    case 'empty_developer':
+      return createDefaultDraft({
+        ...base,
+        templateType: 'empty_developer',
+        environment: 'test',
+        enableDebugLogs: true,
+        exportFunctions: DEFAULT_EXPORT_FUNCTIONS.map(f => ({ ...f, enabled: false })),
+        isMccChildAccount: false,
+        mccParentCustomerId: '',
+      });
+
+    default:
+      return { ...existing, templateType };
+  }
 }

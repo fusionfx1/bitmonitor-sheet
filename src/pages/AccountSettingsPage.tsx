@@ -63,6 +63,14 @@ export function AccountSettingsPage({ config, onChange }: Props) {
             <TextField fullWidth size="small" label="อีเมลเจ้าของ" value={config.ownerEmail} type="email"
               onChange={e => onChange({ ownerEmail: e.target.value })} />
           </Grid>
+          {config.templateType === 'mcc_child' && (
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField fullWidth size="small" label="MCC Parent Customer ID"
+                value={config.mccParentCustomerId ?? ''}
+                onChange={e => onChange({ mccParentCustomerId: e.target.value })}
+                helperText="Customer ID ของบัญชี Manager/MCC หลัก" />
+            </Grid>
+          )}
           <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth size="small">
               <InputLabel>เขตเวลา (Timezone)</InputLabel>
