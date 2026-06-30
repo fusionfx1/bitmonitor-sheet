@@ -16,7 +16,7 @@ export type DateRangeMode =
 
 export type WriteMode = 'append' | 'overwrite' | 'upsert';
 
-export type BudgetExecutionMode = 'request_only' | 'external_owner_tool';
+export type BudgetExecutionMode = 'request_only' | 'external_owner_tool' | 'dry_run' | 'manual_apply_via_script';
 
 export interface ExportFunction {
   enabled: boolean;
@@ -93,7 +93,7 @@ export interface DraftConfig {
   alertIfScriptErrorCountGt: number;
   alertIfCostSpikePercentGt: number;
   alertIfConversionDropPercentGt: number;
-  // Budget action workflow settings. Request/approval only; no Google Ads mutate.
+  // Action workflow settings. Mutations require explicit owner approval and Sheet-side mutate switch.
   budgetActionsEnabled: boolean;
   budgetRequireOwnerApproval: boolean;
   budgetMaxIncreasePct: number;
@@ -101,4 +101,10 @@ export interface DraftConfig {
   budgetExecutionMode: BudgetExecutionMode;
   budgetOwnerApprovalContact: string;
   budgetApprovedExecutionTool: string;
+  actionRunnerEnabled?: boolean;
+  googleAdsScriptCanMutate?: boolean;
+  maxBidChangePct?: number;
+  minBid?: number;
+  maxBid?: number;
+  maxActionsPerRun?: number;
 }
