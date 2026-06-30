@@ -31,6 +31,7 @@ import OutputIcon from '@mui/icons-material/Output';
 import type { DraftConfig } from '../types';
 import { SHEET_TABS } from '../constants';
 import { downloadXlsx, downloadCsvZip, getFilenameBase } from '../xlsxGenerator';
+import { buildAdsScript } from '../adsScriptTemplate';
 
 interface Props {
   config: DraftConfig;
@@ -175,22 +176,7 @@ export function GeneratePage({ config }: Props) {
     }
   };
 
-  const adsScriptSnippet = `// Google Ads Script — Sheet Config
-// วางโค้ดนี้ใน Google Ads Script ของคุณ
-// Script จะอ่านการตั้งค่าทั้งหมดจาก Sheet tabs — ไม่ต้องเขียน constants ใน script
-
-const SHEET_URL = "PASTE_GENERATED_SHEET_URL_HERE";
-const CONFIG_TAB = "_settings_exporter";
-const EXPORT_JOBS_TAB = "_export_jobs";
-const SCRIPT_HEALTH_TAB = "_script_health";
-const SYNC_RUNS_TAB = "_sync_runs";
-const ERROR_LOG_TAB = "_error_log";
-const SCRIPT_VERSION = "${config.scriptVersion}";
-const ADS_API_VERSION = "${config.adsApiVersion}";
-
-// Script จะอ่าน GOOGLE_ADS_CUSTOMER_ID, DATE_RANGE_MODE,
-// MAX_ROWS, WRITE_MODE ฯลฯ จาก CONFIG_TAB ตอน runtime
-// ทำให้การตั้งค่าทั้งหมดอยู่ใน Sheet ไม่ใช่ใน script`;
+  const adsScriptSnippet = buildAdsScript(config);
 
   const bridgeSnippet = `// Apps Script Bridge — Sheet Config
 // วางโค้ดนี้ใน Apps Script web app ของคุณ
@@ -404,10 +390,10 @@ const BRIDGE_VERSION = "${config.sheetVersion}";
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 2 }}>Code Snippet สำหรับ Google Ads Script</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 2 }}>Google Ads Script (Complete — Runnable)</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            วางใน Google Ads Script ของคุณ แทนที่ URL placeholder ด้วย Sheet URL จริง
-            การตั้งค่าทั้งหมดอื่น ๆ อ่านจาก Sheet ตอน runtime
+            Script สมบูรณ์พร้อม deploy ใน Google Ads แทนที่ <code>PASTE_GENERATED_SHEET_URL_HERE</code> ด้วย URL ของ Google Sheet จริง
+            Script อ่าน config ทั้งหมดจาก Sheet ตอน runtime — ไม่มีการแก้ไข campaign ใด ๆ (read-only)
           </Typography>
           <CodeBlock code={adsScriptSnippet} />
         </CardContent>
